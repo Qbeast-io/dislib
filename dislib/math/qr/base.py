@@ -12,7 +12,7 @@ from dislib.data.util import compute_bottom_right_shape, pad_last_blocks_with_ze
 from dislib.data.util.base import remove_last_rows, remove_last_columns
 
 
-def qr_blocked(a: Array, mode='full', overwrite_a=False, save_memory=False):
+def qr_blocked(a: Array, mode='full', overwrite_a=False, save_memory=True):
     """ QR Decomposition (blocked / save memory).
 
     Parameters
@@ -33,7 +33,7 @@ def qr_blocked(a: Array, mode='full', overwrite_a=False, save_memory=False):
     -------
     q : ds-array
         only for modes 'full' and 'economic'
-     r : ds-array
+    r : ds-array
         for all modes
 
     Raises
@@ -46,9 +46,12 @@ def qr_blocked(a: Array, mode='full', overwrite_a=False, save_memory=False):
         If top left shape is different than regular
         or
         If bottom right block is different than regular
+    NotImplementedError
+        If a is sparse.
     """
 
-    _validate_ds_array(a)
+    if a._sparse:
+        raise NotImplementedError("Sparse ds-arrays not supported.")
 
     if mode not in ['full', 'economic', 'r']:
         raise ValueError("Unsupported mode: " + mode)
@@ -57,6 +60,8 @@ def qr_blocked(a: Array, mode='full', overwrite_a=False, save_memory=False):
         warnings.warn("The economic mode does not overwrite the original matrix. "
                       "Argument overwrite_a is changed to False.", UserWarning)
         overwrite_a = False
+
+    _validate_ds_array(a)
 
     a_obj = a if overwrite_a else a.copy()
 
@@ -257,7 +262,7 @@ def _qr_full_save_mem(r):
     r_type = full((r._n_blocks[0], r._n_blocks[1]), (1, 1), OTHER, dtype=np.uint8)
 
     for i in range(r._n_blocks[1]):
-        act_q_type, act_q = _qr_save_mem(
+        act_q_type, act_q = _qr_task_save_mem(
             r._blocks[i][i], r_type._blocks[i][i], r._reg_shape, t=True
         )
 
@@ -274,15 +279,12 @@ def _qr_full_save_mem(r):
         compss_delete_object(act_q_type)
         compss_delete_object(act_q)
 
-        sub_q = [[np.array([0]), np.array([0])],
-                [np.array([0]), np.array([0])]]
         sub_q_type = [[_type_block_save_mem(OTHER), _type_block_save_mem(OTHER)],
                      [_type_block_save_mem(OTHER), _type_block_save_mem(OTHER)]]
 
         # Update values of the respective column
         for j in range(i + 1, r._n_blocks[0]):
-            sub_q[0][0], sub_q[0][1],\
-            sub_q[1][0], sub_q[1][1] = _little_qr_save_mem(
+            sub_q = _little_qr_save_mem(
                 r._blocks[i][i], r_type._blocks[i][i], r._blocks[j][i], r_type._blocks[j][i],
                 r._reg_shape, transpose=True)
 
@@ -317,24 +319,8 @@ def _qr_full_save_mem(r):
                 q_type.replace_block(k, j, q_type_block2)
                 q.replace_block(k, j, q_block2)
 
-            compss_delete_object(sub_q[0][0])
-            compss_delete_object(sub_q[0][1])
-            compss_delete_object(sub_q[1][0])
-            compss_delete_object(sub_q[1][1])
-
-    #pairings = product(range(q._n_blocks[0]),
-    #                   range(q._n_blocks[1]))
-
-    #for i, j in pairings:
-    #    q_block = fill_empty_blocks(q_type._blocks[i][j], q._reg_shape, q._blocks[i][j])
-    #    q.replace_block(i, j, q_block)
-
-    #pairings = product(range(r._n_blocks[0]),
-    #                   range(r._n_blocks[1]))
-
-    #for i, j in pairings:
-    #    r_block = fill_empty_blocks(r_type._blocks[i][j], r._reg_shape, r._blocks[i][j])
-    #    r.replace_block(i, j, r_block)
+            for row, col in product(range(2), range(2)):
+                compss_delete_object(sub_q[row][col])
 
     return q, r
 
@@ -344,7 +330,7 @@ def _qr_r_save_mem(r):
     r_type = full((r._n_blocks[0], r._n_blocks[1]), (1, 1), OTHER, dtype=np.uint8)
 
     for i in range(r._n_blocks[1]):
-        act_q_type, act_q = _qr_save_mem(
+        act_q_type, act_q = _qr_task_save_mem(
             r._blocks[i][i], r_type._blocks[i][i], r._reg_shape, t=True
         )
 
@@ -356,15 +342,12 @@ def _qr_r_save_mem(r):
         compss_delete_object(act_q_type)
         compss_delete_object(act_q)
 
-        sub_q = [[np.array([0]), np.array([0])],
-                [np.array([0]), np.array([0])]]
         sub_q_type = [[_type_block_save_mem(OTHER), _type_block_save_mem(OTHER)],
                      [_type_block_save_mem(OTHER), _type_block_save_mem(OTHER)]]
 
         # Update values of the respective column
         for j in range(i + 1, r._n_blocks[0]):
-            sub_q[0][0], sub_q[0][1],\
-            sub_q[1][0], sub_q[1][1] = _little_qr_save_mem(
+            sub_q = _little_qr_save_mem(
                 r._blocks[i][i], r_type._blocks[i][i], r._blocks[j][i], r_type._blocks[j][i],
                 r._reg_shape, transpose=True)
 
@@ -383,10 +366,8 @@ def _qr_r_save_mem(r):
                 r_type.replace_block(j, k, r_type_block2)
                 r.replace_block(j, k, r_block2)
 
-            compss_delete_object(sub_q[0][0])
-            compss_delete_object(sub_q[0][1])
-            compss_delete_object(sub_q[1][0])
-            compss_delete_object(sub_q[1][1])
+            for row, col in product(range(2), range(2)):
+                compss_delete_object(sub_q[row][col])
 
     return r
 
@@ -404,7 +385,7 @@ def _qr_economic_save_mem(r):
     sub_q_list = {}
 
     for i in range(a_n_blocks[1]):
-        act_q_type, act_q = _qr_save_mem(
+        act_q_type, act_q = _qr_task_save_mem(
             r._blocks[i][i], r_type._blocks[i][i],
             b_size, t=True
         )
@@ -419,13 +400,10 @@ def _qr_economic_save_mem(r):
 
         # Update values of the respective column
         for j in range(i + 1, r._n_blocks[0]):
-            sub_q = [[np.array([0]), np.array([0])],
-                     [np.array([0]), np.array([0])]]
             sub_q_type = [[_type_block_save_mem(OTHER), _type_block_save_mem(OTHER)],
                          [_type_block_save_mem(OTHER), _type_block_save_mem(OTHER)]]
 
-            sub_q[0][0], sub_q[0][1],\
-            sub_q[1][0], sub_q[1][1]  = _little_qr_save_mem(
+            sub_q = _little_qr_save_mem(
                 r._blocks[i][i], r_type._blocks[i][i],
                 r._blocks[j][i], r_type._blocks[j][i],
                 b_size, transpose=True
@@ -465,12 +443,9 @@ def _qr_economic_save_mem(r):
                 q_type.replace_block(j, k, q_type_block2)
                 q.replace_block(j, k, q_block2)
 
-            compss_delete_object(sub_q_list[(j, i)][0][0])
-            compss_delete_object(sub_q_list[(j, i)][0][1])
-            compss_delete_object(sub_q_list[(j, i)][1][0])
-            compss_delete_object(sub_q_list[(j, i)][1][1])
+            for row, col in product(range(2), range(2)):
+                compss_delete_object(sub_q_list[(j, i)][row][col])
             del sub_q_list[(j, i)]
-
 
         for k in range(q._n_blocks[1]):
             _dot_save_mem_b(
@@ -486,15 +461,6 @@ def _qr_economic_save_mem(r):
     remove_last_rows(r, r.shape[0] - r.shape[1])
 
     return q, r
-
-
-#@constraint(computing_units="${computingUnits}")
-#@task(returns=np.array)
-#def fill_empty_blocks(block_type, block_shape, block):
-#    if block_type == ZEROS:
-#        return _empty_block_save_mem(block_shape, True)
-#    else:
-#        return block
 
 
 def _undo_padding_full(q, r, n_rows, n_cols):
@@ -628,36 +594,32 @@ def _gen_identity_save_mem(n, m, b_size, n_size, m_size):
 
 
 @constraint(computing_units="${computingUnits}")
-@task(a=INOUT, a_type=INOUT, returns=np.array)
+@task(a=INOUT, returns=(np.array, np.array))
 def _qr_task_save_mem(a, a_type, b_size, mode='reduced', t=False):
     if a_type[0, 0] == OTHER:
         q, r = np.linalg.qr(a, mode=mode)
+        q_type = _type_block_save_mem(OTHER)
     elif a_type[0, 0] == ZEROS:
-        q, r = np.linalg.qr(np.zeros(b_size), mode=mode)
+        q = np.identity(b_size[0])
+        r = np.zeros(b_size)
+        q_type = _type_block_save_mem(IDENTITY)
     else:
-        q, r = np.linalg.qr(np.identity(max(b_size)), mode=mode)
+        q = np.identity(b_size[0])
+        r = np.identity(b_size[0])
+        q_type = _type_block_save_mem(IDENTITY)
     if t:
         q = np.transpose(q)
 
     np.copyto(a, r)
-    np.copyto(a_type, _type_block_save_mem(OTHER))
-    return q
-
-
-def _qr_save_mem(a, a_type, b_size, mode='reduced', t=False):
-    q_aux = _qr_task_save_mem(a, a_type, b_size, mode=mode, t=t)
-    return _type_block_save_mem(OTHER), q_aux
+    return q_type, q
 
 
 def _type_block_save_mem(value):
     return np.full((1, 1), value, np.uint8)
 
 
-#def _empty_block_save_mem(shape, filled=False):
-#    return np.full(shape, 0, dtype=np.uint8) if filled else object()
-
 def _empty_block_save_mem(shape):
-    return np.full(shape, 0, dtype=np.float64)
+    return np.zeros(shape)
 
 
 @constraint(computing_units="${computingUnits}")
@@ -731,22 +693,22 @@ def _little_qr_task_save_mem(a, type_a, b, type_b, b_size, transpose=False):
 
 def _little_qr_save_mem(a, type_a, b, type_b, b_size, transpose=False):
     sub_q00, sub_q01, sub_q10, sub_q11 = _little_qr_task_save_mem(a, type_a, b, type_b, b_size, transpose)
-    return sub_q00, sub_q01, sub_q10, sub_q11
+    return [[sub_q00, sub_q01], [sub_q10, sub_q11]]
 
 
 @constraint(computing_units="${computingUnits}")
-@task(returns=(np.array, np.array))
+@task(c=INOUT, type_c=INOUT)
 def _multiply_single_block_task_save_mem(a, type_a, b, type_b, c, type_c, b_size, transpose_a=False, transpose_b=False):
     if type_a[0][0] == ZEROS or type_b[0][0] == ZEROS:
-        return type_c, c
+        return
 
     fun_a = [type_a, a]
     fun_b = [type_b, b]
 
     if type_c[0][0] == ZEROS:
-        c = np.zeros((b_size[0], b_size[1]))
+        np.copyto(c, np.zeros((b_size[0], b_size[1])))
     elif type_c[0][0] == IDENTITY:
-        c = np.identity(b_size[0])
+        np.copyto(c, np.identity(b_size[0]))
 
     if fun_a[0][0][0] == IDENTITY:
         if fun_b[0][0][0] == IDENTITY:
@@ -756,7 +718,8 @@ def _multiply_single_block_task_save_mem(a, type_a, b, type_b, c, type_c, b_size
         else:
             aux = fun_b[1]
         c += aux
-        return _type_block_save_mem(OTHER), c
+        np.copyto(type_c, _type_block_save_mem(OTHER))
+        return
 
     if fun_b[0][0][0] == IDENTITY:
         if transpose_a:
@@ -764,7 +727,8 @@ def _multiply_single_block_task_save_mem(a, type_a, b, type_b, c, type_c, b_size
         else:
             aux = fun_a[1]
         c += aux
-        return _type_block_save_mem(OTHER), c
+        np.copyto(type_c, _type_block_save_mem(OTHER))
+        return
 
     if transpose_a:
         fun_a[1] = np.transpose(fun_a[1])
@@ -773,11 +737,8 @@ def _multiply_single_block_task_save_mem(a, type_a, b, type_b, c, type_c, b_size
         fun_b[1] = np.transpose(fun_b[1])
 
     c += (fun_a[1].dot(fun_b[1]))
-    return _type_block_save_mem(OTHER), c
-
-
-def _multiply_single_block_save_mem(a, type_a, b, type_b, c, type_c, b_size, transpose_a=False, transpose_b=False):
-    return _multiply_single_block_task_save_mem(a, type_a, b, type_b, c, type_c, b_size, transpose_a=transpose_a, transpose_b=transpose_b)
+    np.copyto(type_c, _type_block_save_mem(OTHER))
+    return
 
 
 def _multiply_blocked_save_mem(a, type_a, b, type_b, b_size, transpose_a=False, transpose_b=False):
@@ -818,7 +779,7 @@ def _multiply_blocked_save_mem(a, type_a, b, type_b, b_size, transpose_a=False, 
             c[i].append(_empty_block_save_mem(b_size))
             type_c[i].append(_type_block_save_mem(ZEROS))
             for k in range(len(a[0])):
-                type_c[i][j], c[i][j] = _multiply_single_block_save_mem(
+                _multiply_single_block_task_save_mem(
                     a[i][k], type_a[i][k],
                     b[k][j], type_b[k][j],
                     c[i][j], type_c[i][j],

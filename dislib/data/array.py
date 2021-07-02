@@ -45,7 +45,7 @@ class Array(object):
     shape : tuple (int, int)
         Total number of elements in the array.
     sparse : boolean, optional (default=False)
-        Whether this array stores sparse data.
+        Whether this arrarandomy stores sparse data.
     delete : boolean, optional (default=True)
         Whether to call compss_delete_object on the blocks when the garbage
         collector deletes this ds-array.

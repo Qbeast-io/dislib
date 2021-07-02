@@ -50,8 +50,10 @@ class QRTest(unittest.TestCase):
     @parameterized.expand([
         ((7, 6), (3, 3), False), ((7, 5), (2, 2), False), ((10, 4), (3, 3), False),
         ((4, 4), (3, 3), False), ((6, 4), (3, 3), False), ((6, 5), (2, 2), False),
+        ((100, 50), (12, 12), False), ((1000, 500), (120, 120), False),
         ((7, 6), (3, 3), True), ((7, 5), (2, 2), True), ((10, 4), (3, 3), True),
         ((4, 4), (3, 3), True), ((6, 4), (3, 3), True), ((6, 5), (2, 2), True),
+        ((100, 50), (12, 12), True), ((1000, 500), (120, 120), True)
     ])
     def test_qr_with_padding(self, m_shape, b_shape, save_memory):
         """Tests qr_blocked with padding"""
@@ -76,14 +78,13 @@ class QRTest(unittest.TestCase):
 
         q = q.collect()
         r = r.collect()
-        m2b = m2b_ds.collect()
 
         # check if Q matrix is orthogonal
         self.assertTrue(np.allclose(q.T.dot(q), np.identity(m_shape[1])))
         # check if R matrix is upper triangular
         self.assertTrue(np.allclose(np.triu(r), r))
         # check if the product Q * R is the original matrix
-        self.assertTrue(np.allclose(q.dot(r), m2b))
+        self.assertTrue(np.allclose(q.dot(r), m2b_ds.collect()))
         # check the dimensions of Q
         self.assertTrue(q.shape == (m_shape[0], m_shape[1]))
         # check the dimensions of R
