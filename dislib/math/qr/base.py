@@ -4,7 +4,8 @@ import warnings
 
 from pycompss.api.api import compss_delete_object
 from pycompss.api.constraint import constraint
-from pycompss.api.parameter import INOUT, IN, IN_DELETE
+from pycompss.api.parameter import INOUT, IN, IN_DELETE, COLLECTION_INOUT, Depth, Type, COLLECTION_IN_DELETE, \
+    COLLECTION_IN
 from pycompss.api.task import task
 
 from dislib.data.array import Array, identity, full, eye
@@ -290,34 +291,25 @@ def _qr_full_save_mem(r):
 
             # Update values of the row for the value updated in the column
             for k in range(i + 1, r._n_blocks[1]):
-                [[r_type_block1], [r_type_block2]],\
-                [[r_block1], [r_block2]] = _multiply_blocked_save_mem(
+                _multiply_blocked_save_mem(
                     sub_q,
                     sub_q_type,
                     [[r._blocks[i][k]], [r._blocks[j][k]]],
                     [[r_type._blocks[i][k]], [r_type._blocks[j][k]]],
-                    r._reg_shape
+                    r._reg_shape,
+                    overwrite_b=True
                 )
-                r_type.replace_block(i, k, r_type_block1)
-                r.replace_block(i, k, r_block1)
-                r_type.replace_block(j, k, r_type_block2)
-                r.replace_block(j, k, r_block2)
-
 
             for k in range(r._n_blocks[0]):
-                [[q_type_block1, q_type_block2]],\
-                [[q_block1, q_block2]] = _multiply_blocked_save_mem(
+                _multiply_blocked_save_mem(
                     [[q._blocks[k][i], q._blocks[k][j]]],
                     [[q_type._blocks[k][i], q_type._blocks[k][j]]],
                     sub_q,
                     sub_q_type,
                     r._reg_shape,
-                    transpose_b=True
+                    transpose_b=True,
+                    overwrite_a=True
                 )
-                q_type.replace_block(k, i, q_type_block1)
-                q.replace_block(k, i, q_block1)
-                q_type.replace_block(k, j, q_type_block2)
-                q.replace_block(k, j, q_block2)
 
             for row, col in product(range(2), range(2)):
                 compss_delete_object(sub_q[row][col])
@@ -353,18 +345,14 @@ def _qr_r_save_mem(r):
 
             # Update values of the row for the value updated in the column
             for k in range(i + 1, r._n_blocks[1]):
-                [[r_type_block1], [r_type_block2]],\
-                [[r_block1], [r_block2]] = _multiply_blocked_save_mem(
+                _multiply_blocked_save_mem(
                     sub_q,
                     sub_q_type,
                     [[r._blocks[i][k]], [r._blocks[j][k]]],
                     [[r_type._blocks[i][k]], [r_type._blocks[j][k]]],
-                    r._reg_shape
+                    r._reg_shape,
+                    overwrite_b=True
                 )
-                r_type.replace_block(i, k, r_type_block1)
-                r.replace_block(i, k, r_block1)
-                r_type.replace_block(j, k, r_type_block2)
-                r.replace_block(j, k, r_block2)
 
             for row, col in product(range(2), range(2)):
                 compss_delete_object(sub_q[row][col])
@@ -413,35 +401,27 @@ def _qr_economic_save_mem(r):
 
             # Update values of the row for the value updated in the column
             for k in range(i + 1, a_n_blocks[1]):
-                [[r_type_block1], [r_type_block2]], \
-                [[r_block1], [r_block2]] = _multiply_blocked_save_mem(
+                _multiply_blocked_save_mem(
                     sub_q,
                     sub_q_type,
                     [[r._blocks[i][k]], [r._blocks[j][k]]],
                     [[r_type._blocks[i][k]], [r_type._blocks[j][k]]],
-                    b_size
+                    b_size,
+                    overwrite_b=True
                 )
-                r_type.replace_block(i, k, r_type_block1)
-                r.replace_block(i, k, r_block1)
-                r_type.replace_block(j, k, r_type_block2)
-                r.replace_block(j, k, r_block2)
 
     for i in reversed(range(len(act_q_list))):
         for j in reversed(range(i + 1, r._n_blocks[0])):
             for k in range(q._n_blocks[1]):
-                [[q_type_block1], [q_type_block2]], \
-                [[q_block1], [q_block2]] = _multiply_blocked_save_mem(
+                _multiply_blocked_save_mem(
                     sub_q_list[(j, i)][1],
                     sub_q_list[(j, i)][0],
                     [[q._blocks[i][k]], [q._blocks[j][k]]],
                     [[q_type._blocks[i][k]], [q_type._blocks[j][k]]],
                     b_size,
-                    transpose_a=True
+                    transpose_a=True,
+                    overwrite_b=True
                 )
-                q_type.replace_block(i, k, q_type_block1)
-                q.replace_block(i, k, q_block1)
-                q_type.replace_block(j, k, q_type_block2)
-                q.replace_block(j, k, q_block2)
 
             for row, col in product(range(2), range(2)):
                 compss_delete_object(sub_q_list[(j, i)][row][col])
@@ -741,7 +721,8 @@ def _multiply_single_block_task_save_mem(a, type_a, b, type_b, c, type_c, b_size
     return
 
 
-def _multiply_blocked_save_mem(a, type_a, b, type_b, b_size, transpose_a=False, transpose_b=False):
+def _multiply_blocked_save_mem(a, type_a, b, type_b, b_size, transpose_a=False, transpose_b=False,
+                               overwrite_a=False, overwrite_b=False):
     if transpose_a:
         new_a = []
         for i in range(len(a[0])):
@@ -785,7 +766,20 @@ def _multiply_blocked_save_mem(a, type_a, b, type_b, b_size, transpose_a=False, 
                     c[i][j], type_c[i][j],
                     b_size, transpose_a=transpose_a, transpose_b=transpose_b)
 
-    return type_c, c
+    if overwrite_a:
+        _overwrite_blocks(a, type_a, c, type_c)
+
+    if overwrite_b:
+        _overwrite_blocks(b, type_b, c, type_c)
+
+
+@task(org_block={Type: COLLECTION_INOUT, Depth: 2}, org_block_type={Type: COLLECTION_INOUT, Depth: 2},
+      new_block={Type: COLLECTION_IN, Depth: 2}, new_block_type={Type: COLLECTION_IN, Depth: 2})
+def _overwrite_blocks(org_block, org_block_type, new_block, new_block_type):
+    for i in range(len(org_block)):
+        for j in range(len(org_block[i])):
+            np.copyto(org_block[i][j], new_block[i][j])
+            np.copyto(org_block_type[i][j], new_block_type[i][j])
 
 
 def _transpose_block_save_mem(a, a_type):
