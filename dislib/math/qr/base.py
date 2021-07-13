@@ -1,5 +1,8 @@
-from itertools import product
+import os
+
 import numpy as np
+from threadpoolctl import threadpool_limits
+
 import warnings
 
 from pycompss.api.api import compss_delete_object
@@ -554,6 +557,7 @@ def _validate_ds_array(a: Array):
 @constraint(computing_units="${computingUnits}")
 @task(returns=(np.array, np.array), a=IN_DELETE)
 def _qr_task(a, mode='reduced', t=False):
+    threadpool_limits(limits=int(os.getenv("computingUnits", 1)))
     from numpy.linalg import qr
     q, r = qr(a, mode=mode)
     if t:
@@ -564,6 +568,7 @@ def _qr_task(a, mode='reduced', t=False):
 @constraint(computing_units="${computingUnits}")
 @task(returns=np.array)
 def _dot_task(a, b, transpose_result=False, transpose_a=False, transpose_b=False):
+    threadpool_limits(limits=int(os.getenv("computingUnits", 1)))
     if transpose_a:
         a = np.transpose(a)
     if transpose_b:
@@ -576,6 +581,7 @@ def _dot_task(a, b, transpose_result=False, transpose_a=False, transpose_b=False
 @constraint(computing_units="${computingUnits}")
 @task(returns=(np.array, np.array, np.array, np.array, np.array, np.array))
 def _little_qr_task(a, b, b_size, transpose=False):
+    threadpool_limits(limits=int(os.getenv("computingUnits", 1)))
     regular_b_size = b_size[0]
     curr_a = np.bmat([[a], [b]])
     (sub_q, sub_r) = np.linalg.qr(curr_a, mode='complete')
@@ -597,6 +603,7 @@ def _little_qr(a, b, b_size, transpose=False):
 @constraint(computing_units="${computingUnits}")
 @task(a=IN, b=IN, c=INOUT)
 def _multiply_single_block_task(a, b, c, transpose_a=False, transpose_b=False):
+    threadpool_limits(limits=int(os.getenv("computingUnits", 1)))
     if transpose_a:
         a = np.transpose(a)
     if transpose_b:
@@ -650,6 +657,7 @@ def _gen_identity_save_mem(n, m, b_size, n_size, m_size):
 @constraint(computing_units="${computingUnits}")
 @task(returns=(np.array, np.array))
 def _qr_task_save_mem(a, a_type, b_size, mode='reduced', t=False):
+    threadpool_limits(limits=int(os.getenv("computingUnits", 1)))
     from numpy.linalg import qr
     if a_type[0, 0] == OTHER:
         q, r = qr(a, mode=mode)
@@ -681,6 +689,7 @@ def _empty_block_save_mem(shape):
 @constraint(computing_units="${computingUnits}")
 @task(returns=(np.array, np.array))
 def _dot_save_mem(a, a_type, b, b_type, b_size, transpose_result=False, transpose_a=False, transpose_b=False):
+    threadpool_limits(limits=int(os.getenv("computingUnits", 1)))
     if a_type[0][0] == ZEROS:
         return _type_block_save_mem(ZEROS), _empty_block_save_mem(b_size)
     if a_type[0][0] == IDENTITY:
@@ -706,6 +715,7 @@ def _dot_save_mem(a, a_type, b, b_type, b_size, transpose_result=False, transpos
 @constraint(computing_units="${computingUnits}")
 @task(returns=(np.array, np.array, np.array, np.array, np.array, np.array))
 def _little_qr_task_save_mem(a, type_a, b, type_b, b_size, transpose=False):
+    threadpool_limits(limits=int(os.getenv("computingUnits", 1)))
     regular_b_size = b_size[0]
     ent_a = [type_a, a]
     ent_b = [type_b, b]
@@ -734,6 +744,7 @@ def _little_qr_save_mem(a, type_a, b, type_b, b_size, transpose=False):
 @constraint(computing_units="${computingUnits}")
 @task(returns=(np.array, np.array))
 def _multiply_single_block_task_save_mem(a, type_a, b, type_b, c, type_c, b_size, transpose_a=False, transpose_b=False):
+    threadpool_limits(limits=int(os.getenv("computingUnits", 1)))
     if type_a[0][0] == ZEROS or type_b[0][0] == ZEROS:
         return type_c, c
 
