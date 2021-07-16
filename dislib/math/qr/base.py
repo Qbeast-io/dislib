@@ -7,6 +7,7 @@ from pycompss.api.constraint import constraint
 from pycompss.api.parameter import INOUT, IN, IN_DELETE, COLLECTION_INOUT, Depth, Type, COLLECTION_IN_DELETE, \
     COLLECTION_IN
 from pycompss.api.task import task
+from pycompss.util.objects.replace import replace
 
 from dislib.data.array import Array, identity, full, eye
 from dislib.data.util import compute_bottom_right_shape, pad_last_blocks_with_zeros
@@ -590,7 +591,7 @@ def _qr_task_save_mem(a, a_type, b_size, mode='reduced', t=False):
     if t:
         q = np.transpose(q)
 
-    np.copyto(a, r)
+    replace(a, r)
     return q_type, q
 
 
@@ -606,16 +607,16 @@ def _empty_block_save_mem(shape):
 @task(a=INOUT, a_type=INOUT)
 def _dot_save_mem_a(a, a_type, b, b_type, b_size, transpose_result=False, transpose_a=False, transpose_b=False):
     block_type_new, block_new = _dot_save_mem(a, a_type, b, b_type, b_size, transpose_result, transpose_a, transpose_b)
-    np.copyto(a, block_new)
-    np.copyto(a_type, block_type_new)
+    replace(a, block_new)
+    replace(a_type, block_type_new)
 
 
 @constraint(computing_units="${computingUnits}")
 @task(b=INOUT, b_type=INOUT)
 def _dot_save_mem_b(a, a_type, b, b_type, b_size, transpose_result=False, transpose_a=False, transpose_b=False):
     block_type_new, block_new = _dot_save_mem(a, a_type, b, b_type, b_size, transpose_result, transpose_a, transpose_b)
-    np.copyto(b, block_new)
-    np.copyto(b_type, block_type_new)
+    replace(b, block_new)
+    replace(b_type, block_type_new)
 
 
 def _dot_save_mem(a, a_type, b, b_type, b_size, transpose_result=False, transpose_a=False, transpose_b=False):
@@ -659,10 +660,10 @@ def _little_qr_task_save_mem(a, type_a, b, type_b, b_size, transpose=False):
     bb = sub_r[regular_b_size:2 * regular_b_size]
     sub_q = _split_matrix(sub_q, 2)
 
-    np.copyto(a, aa)
-    np.copyto(type_a, _type_block_save_mem(OTHER))
-    np.copyto(b, bb)
-    np.copyto(type_b, _type_block_save_mem(OTHER))
+    replace(a, aa)
+    replace(type_a, _type_block_save_mem(OTHER))
+    replace(b, bb)
+    replace(type_b, _type_block_save_mem(OTHER))
 
     if transpose:
         return np.transpose(sub_q[0][0]), np.transpose(sub_q[1][0]), np.transpose(sub_q[0][1]), np.transpose(
@@ -686,9 +687,9 @@ def _multiply_single_block_task_save_mem(a, type_a, b, type_b, c, type_c, b_size
     fun_b = [type_b, b]
 
     if type_c[0][0] == ZEROS:
-        np.copyto(c, np.zeros((b_size[0], b_size[1])))
+        replace(c, np.zeros((b_size[0], b_size[1])))
     elif type_c[0][0] == IDENTITY:
-        np.copyto(c, np.identity(b_size[0]))
+        replace(c, np.identity(b_size[0]))
 
     if fun_a[0][0][0] == IDENTITY:
         if fun_b[0][0][0] == IDENTITY:
@@ -698,7 +699,7 @@ def _multiply_single_block_task_save_mem(a, type_a, b, type_b, c, type_c, b_size
         else:
             aux = fun_b[1]
         c += aux
-        np.copyto(type_c, _type_block_save_mem(OTHER))
+        replace(type_c, _type_block_save_mem(OTHER))
         return
 
     if fun_b[0][0][0] == IDENTITY:
@@ -707,7 +708,7 @@ def _multiply_single_block_task_save_mem(a, type_a, b, type_b, c, type_c, b_size
         else:
             aux = fun_a[1]
         c += aux
-        np.copyto(type_c, _type_block_save_mem(OTHER))
+        replace(type_c, _type_block_save_mem(OTHER))
         return
 
     if transpose_a:
@@ -717,7 +718,7 @@ def _multiply_single_block_task_save_mem(a, type_a, b, type_b, c, type_c, b_size
         fun_b[1] = np.transpose(fun_b[1])
 
     c += (fun_a[1].dot(fun_b[1]))
-    np.copyto(type_c, _type_block_save_mem(OTHER))
+    replace(type_c, _type_block_save_mem(OTHER))
     return
 
 
@@ -778,8 +779,8 @@ def _multiply_blocked_save_mem(a, type_a, b, type_b, b_size, transpose_a=False, 
 def _overwrite_blocks(org_block, org_block_type, new_block, new_block_type):
     for i in range(len(org_block)):
         for j in range(len(org_block[i])):
-            np.copyto(org_block[i][j], new_block[i][j])
-            np.copyto(org_block_type[i][j], new_block_type[i][j])
+            replace(org_block[i][j], new_block[i][j])
+            replace(org_block_type[i][j], new_block_type[i][j])
 
 
 def _transpose_block_save_mem(a, a_type):
